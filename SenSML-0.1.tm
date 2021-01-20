@@ -69,7 +69,7 @@ proc ::sensml::new { args } {
 proc ::sensml::close { s } {
   upvar \#0 $s S
 
-  callback $s CLOSE
+  Callback $s CLOSE
   dict set S remainder ""
   Init $s
 }
@@ -246,6 +246,8 @@ proc ::sensml::Pack { s json } {
       dict set pack t [expr {$now+$t}]
     }
 
+    ## Add resolution for base64 encoded stuff and check types for vb, etc.
+
     Callback $s PACK $pack
   }
 }
@@ -391,10 +393,12 @@ proc ::sensml::Dispatch { s cmd args } {
 proc ::sensml::Callback { s step args } {
   upvar \#0 $s S
 
-  if { [dict get $S -callback] ne "" } {
-
-  }
   Log $s DEBUG "Callback: $step $args"
+  if { [llength [dict get $S -callback]] } {
+    if { [catch {{*}[dict get $S -callback] $s $step {*}$args} err] } {
+      Log $s WARN "Could not callback for $step: $err"
+    }
+  }
 }
 
 proc ::sensml::Log { s lvl msg } {
