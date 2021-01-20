@@ -1,16 +1,44 @@
 package require Tcl 8.6
+package require json
 
 namespace eval ::sensml {
   namespace eval vars {
     variable id 0;        # Identifier generator
-    variable -log stderr; # Log stream, empty to switch off
+    # Known base fields and their default values.
+    variable base {
+      bn ""
+      bt 0.0
+      bu ""
+      bv 0.0
+      bs 0.0
+      bver 10
+    }
+    # Known fields and the operation to perform together with the corresponding
+    # base field when relevant. + will append (for strings) or add (for
+    # numbers).
+    variable fields {
+      n +
+      u ""
+      v +
+      vs ""
+      vb ""
+      vd ""
+      s +
+      t +
+      ut ""
+    }
+    variable forbidden "*_";    # Forbidden fields.
+    variable reltime 268435456; # Breakout point for relative->absolute time
     variable version [lindex [split [file rootname [file tail [info script]]] -] end]
+    variable levels {ERROR WARN NOTICE INFO DEBUG TRACE}
   }
 
   # defaults for all new streams
   namespace eval sensml {
-    variable -forbidden "*_"
+    variable -log stderr;       # Log stream, empty to switch off
+    variable -level WARN;       # loglevel
     variable -callback  ""
+    variable -version   10
   }
 
   namespace export {[a-z]*}
@@ -27,10 +55,216 @@ proc ::sensml::new { args } {
 
   # Capture arguments and give good defaults into the stread object (a
   # dictionary). Create the command
-  defaults S sensml {*}$args
+  defaults S sensml
+  configure $s {*}$args
   interp alias {} $s {} [namespace current]::Dispatch $s
+
+  # Initialise the internal state of the stream
+  dict set S remainder ""
+  Init $s
+
+  return $s
 }
 
+proc ::sensml::close { s } {
+  upvar \#0 $s S
+
+  callback $s CLOSE
+  dict set S remainder ""
+  Init $s
+}
+
+
+proc ::sensml::configure { s args } {
+  upvar \#0 $s S
+
+  foreach {opt val} $args {
+    switch -- $opt {
+      -level {
+        if { [lsearch -nocase $vars::levels [dict get $S -level]] < 0 } {
+          return -code error "$val is not a valid log level, should be [join $vars::levels , ]"
+        }
+      }
+      -version {
+        if { ! [string is integer -strict $val] } {
+          return -code error "version $val should be an integer"
+        }
+      }
+    }
+
+    if { [dict exists $S $opt] } {
+      dict set S $opt $val
+    }
+  }
+
+}
+
+proc ::sensml::stream { s json } {
+  upvar \#0 $s S
+
+  # Append remainder of previous part of stream, if any
+  if { [dict get $S remainder] ne "" } {
+    set json [dict get $S remainder]$json
+  }
+
+  set json [string trim $json]
+  if { [string index $json 0] eq "\[" } {
+    Init $s
+    Callback $s OPEN
+    set json [string trim [string range $json 1 end]]
+  }
+
+  set json [regsub -all -- {\}\s*,\s*\{} $json "\},\{"]
+  set json [regsub -all -- {\}\s*\]} $json "\}\]"]
+  set start 0
+  while {$start<[string length $json]} {
+    set open [string first "\{" $json $start]
+    set nxt [string first "\},\{" $json $open]
+    set end [string first "\}\]" $json $open]
+    if { $open >= 0 } {
+      if { $end >= 0 && $nxt < 0 } {
+        Pack $s [string range $json $open $end]
+        Callback $s CLOSE
+        dict set S remainder ""
+        break
+      } elseif { $nxt >= 0 } {
+        if { $end < $nxt && $end >= 0 } {
+          Pack $s [string range $json $open $end]
+          Callback $s CLOSE
+          dict set S remainder ""
+          break
+        } else {
+          Pack $s [string range $json $open $nxt]
+          set start [expr {$nxt+1}]
+        }
+      } else {
+        dict set S remainder [string range $json $open end]
+      }
+    }
+  }
+}
+
+proc ::sensml::Init { s } {
+  upvar \#0 $s S
+
+  dict for {base init} $vars::base {
+    if { [dict exists $S $base] } {
+      dict unset S $base
+    }
+  }
+}
+
+proc ::sensml::Pack { s json } {
+  upvar \#0 $s S
+
+  # Parse the JSON Pack properly
+  set d [::json::json2dict $json]
+  Log $s TRACE "JSON Pack: $d"
+
+  # Set and remember base fields that would be present in the pack.
+  dict for {f v} $d {
+    if { [string match "b*" $f] } {
+      dict set S $f $v
+    }
+  }
+
+  # We skip all packs that would have a version number larger than the one that
+  # we implement. Period, no questions asked.
+  if { [Base $s bver] <= [dict get $S -version] } {
+    set pack [dict create];  # Resolved pack to be called back
+
+    # First pass: arrange for all "pure" fields, i.e. non-base, to inherit the
+    # value from the current base field.
+    dict for {f v} $d {
+      # Return an error on forbidden fields!
+      if { [string match $vars::forbidden $f] } {
+        return -code error "$f is a forbidden field name!"
+      }
+
+      if { ! [string match "b*" $f] } {
+        set added 0
+        foreach {known op} $vars::fields {
+          if { $f eq $known && $op eq "+" } {
+            if { [dict exists $vars::base "b$f"] } {
+              set bv [Base $s "b$f"]
+              if { [string is double -strict [dict get $vars::base "b$f"]] } {
+                dict set pack $f [expr {$bv+$v}]
+              } else {
+                dict set pack $f "${bv}${v}"
+              }
+              set added 1
+            }
+          }
+        }
+        if { ! $added } {
+          dict set pack $f $v
+        }
+      }
+    }
+
+    # Set base fields that are explicitely set for the stream, but not for this
+    # pack.
+    dict for {bf v } [dict filter $S key b*] {
+      set f [string range $bf 1 end]
+      if { $bf ne "bver" && ![dict exists $pack $f] } {
+        dict set pack $f $v
+      }
+    }
+
+    # Follow the RFC when it comes to sums and values. Something must be there!
+    if { ! [dict exists $pack s] } {
+      set nvkeys [llength [dict keys $pack "v*"]]
+      if { $nvkeys > 1 } {
+        return -code error "More than one value specified in $json"
+      } elseif { $nvkeys == 0 } {
+        # Default value when nothing is present.
+        dict set pack v [dict get $vars::base bv]
+      }
+    }
+
+    # Scream on wrong names, follow the RFC. Since we already have accounted for
+    # basenames when here, we scream if nothing was found.
+    if { [dict exists $pack n] } {
+      if { ! [regexp -- {[a-zA-Z0-9][a-zA-Z0-9:./_-]*} [dict get $pack n]] } {
+        return -code error "Wrong name [dict exists $pack n] in $json"
+      }
+    } else {
+      return -code error "No name, nor basename provided at $json"
+    }
+
+    # Arrange for a time to always be present, defaulting to 0.0 (through the
+    # default of base time).
+    if { ! [dict exists $pack t] } {
+      dict set pack t [Base $s bt]
+    }
+
+    # Resolve time to absolute value
+    set now [clock seconds]
+    set t [dict get $pack t]
+    if { $t < $vars::reltime } {
+      # Seconds from/after now.
+      dict set pack t [expr {$now+$t}]
+    }
+
+    Callback $s PACK $pack
+  }
+}
+
+
+proc ::sensml::Base { s f } {
+  upvar \#0 $s S
+
+  if { [dict exists $S $f] } {
+    return [dict get $S $f]
+  } else {
+    dict for {base init} $vars::base {
+      if { $base eq $f } {
+        return $init
+      }
+    }
+  }
+  return "";  # Default for unknown base fields
+}
 
 # ::sensml::getopt -- Get options
 #
@@ -154,10 +388,22 @@ proc ::sensml::Dispatch { s cmd args } {
 }
 
 
-proc ::sensml::Log { d lvl msg } {
-  if { ${vars::-log} ne "" } {
+proc ::sensml::Callback { s step args } {
+  upvar \#0 $s S
+
+  if { [dict get $S -callback] ne "" } {
+
+  }
+  Log $s DEBUG "Callback: $step $args"
+}
+
+proc ::sensml::Log { s lvl msg } {
+  upvar \#0 $s S
+  if { [dict get $S -log] ne "" } {
     set lvl [string tolower $lvl]
-    puts ${vars::-log} "\[$lvl\] $msg"
+    if { [lsearch -nocase $vars::levels $lvl] <= [lsearch -nocase $vars::levels [dict get $S -level]] } {
+      puts [dict get $S -log] "\[$lvl\] $msg"
+    }
   }
 }
 
