@@ -27,12 +27,19 @@ namespace eval ::senml {
 # Side Effects:
 #       Will callback the command at -callback as parsing progresses
 proc ::senml::parse { json args } {
+  # Create a SenSML context, pass it all arguments.
   set s [sensml {*}$args]
+
+  # Parse the entire JSON array and pass each dictionary separately for
+  # processing at the SenSML parser. This bypasses the heuristics (and therefor
+  # possible errors) that would occur if we called $s stream instead.
   $s begin
   foreach d [::json::json2dict $json] {
     $s dictpack $d
   }
   $s end
+
+  # Remove context, we are done
   $s delete
 }
 
@@ -67,7 +74,7 @@ proc ::senml::resolve { json args } {
   # Parse JSON, passing the global string to convert back to JSON progressively.
   parse $json -callback [list ::senml::Resolver $j] {*}$args
 
-  # opy global string to local var to be able to return it
+  # Copy global string to local var to be able to return it
   # after we've unset the global to avoid leaking memory.
   set str [set $j]
   unset $j
