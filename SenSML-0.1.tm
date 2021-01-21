@@ -48,6 +48,25 @@ namespace eval ::sensml {
 }
 
 
+# ::sensml::new -- Create parsing context.
+#
+#       This procedure creates a SenSML parsing context and is the only command
+#       exported by this parser. The command returns an identifier to the
+#       context that should be used for all further calls to this library. To
+#       feed the context, either perform a series of calls to stream with
+#       incomplete JSON data, or call it with entire JSON objects in SenML
+#       format, with calls to begin/(end) to mark the beginning and end of an
+#       array.
+#
+# Arguments:
+#	  args	List of dashled options and arguments, must match content of namespace
+#
+# Results:
+#       Returns an identifier for all further interaction with the parsing
+#       context
+#
+# Side Effects:
+#       None.
 proc ::sensml::new { args } {
   # Create new stream object
   set s [namespace current]::[incr vars::id]
@@ -66,6 +85,22 @@ proc ::sensml::new { args } {
   return $s
 }
 
+
+# ::sensml::close -- (force-)close current array
+#
+#       This procedure closes the current array in progress, if any. It will
+#       reset the value of all base fields in preparation for the next array, if
+#       any. This does not destroy the context, instead it can be used to parse
+#       several JSON arrays using the same context.
+#
+# Arguments:
+#	  s	  Identifier of a parsing context, as returned by new
+#
+# Results:
+#       None.
+#
+# Side Effects:
+#       None.
 proc ::sensml::close { s } {
   upvar \#0 $s S
 
@@ -75,6 +110,40 @@ proc ::sensml::close { s } {
 }
 
 
+# ::sensml::delete -- delete parsing context
+#
+#       This procedure deletes a parsing context and removes it from memory. The
+#       current array is forced closed before deletion..
+#
+# Arguments:
+#	  s	  Identifier of a parsing context, as returned by new
+#
+# Results:
+#       None.
+#
+# Side Effects:
+#       None.
+proc ::sensml::delete { s } {
+  close $s
+  unset $s
+}
+
+
+# ::sensml::configure -- (re)configure a parsing context
+#
+#       This procedure changes the values of one of the dash-led options for the
+#       context.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  args	List of dashled options and arguments, must match content of namespace
+#
+# Results:
+#       Returns a dictionary of all options and their values after
+#       (re)configuration.
+#
+# Side Effects:
+#       None.
 proc ::sensml::configure { s args } {
   upvar \#0 $s S
 
@@ -97,8 +166,26 @@ proc ::sensml::configure { s args } {
     }
   }
 
+  return dict filter $S key "-*"
 }
 
+
+# ::sensml::stream -- Push incomplete JSON for continuous parsing.
+#
+#       This procedure accepts possibly incomplete JSON and will isolate the
+#       beginning of arrays and cut the remaining into separated JSON objects to
+#       be parsed as SenML packs. Discovery of arrays and objects is made at the
+#       string level, outside of the JSON parser.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  json	Incomplete JSON
+#
+# Results:
+#       None
+#
+# Side Effects:
+#       Will call the callback associated to the context as many times as needed
 proc ::sensml::stream { s json } {
   upvar \#0 $s S
 
@@ -107,15 +194,21 @@ proc ::sensml::stream { s json } {
     set json [dict get $S remainder]$json
   }
 
-  set json [string trim $json]
+  # Remove leading space and detect beginning of array.
+  set json [string trimleft $json]
   if { [string index $json 0] eq "\[" } {
-    Init $s
-    Callback $s OPEN
+    begin $s
     set json [string trim [string range $json 1 end]]
   }
 
+  # Arrange for object-to-object transitions and object-to-end-of-array
+  # transitions to not contain whitespaces. This is not JSON aware, thus could
+  # in theory intervene with the content of the stream (e.g. content of a
+  # matching value).
   set json [regsub -all -- {\}\s*,\s*\{} $json "\},\{"]
   set json [regsub -all -- {\}\s*\]} $json "\}\]"]
+
+  # Isolates blocks and callback with content for each pack
   set start 0
   while {$start<[string length $json]} {
     set open [string first "\{" $json $start]
@@ -123,27 +216,77 @@ proc ::sensml::stream { s json } {
     set end [string first "\}\]" $json $open]
     if { $open >= 0 } {
       if { $end >= 0 && $nxt < 0 } {
-        Pack $s [string range $json $open $end]
-        Callback $s CLOSE
-        dict set S remainder ""
+        jsonpack $s [string range $json $open $end]
+        end $s
         break
       } elseif { $nxt >= 0 } {
         if { $end < $nxt && $end >= 0 } {
-          Pack $s [string range $json $open $end]
-          Callback $s CLOSE
-          dict set S remainder ""
+          jsonpack $s [string range $json $open $end]
+          end $s
           break
         } else {
-          Pack $s [string range $json $open $nxt]
+          jsonpack $s [string range $json $open $nxt]
           set start [expr {$nxt+1}]
         }
       } else {
+        # Remember what is left after the last entire JSON object for next call
+        # to this proc.
         dict set S remainder [string range $json $open end]
       }
     }
   }
 }
 
+
+# ::sensml::begin -- Begin array parsing
+#
+#       This procedure (re)initialise the parsing context and starts a new array
+#       of JSON object packs.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#
+# Results:
+#       None
+#
+# Side Effects:
+#       Will call the callback associated to the context as many times as needed
+proc ::sensml::begin { s } {
+  Init $s
+  Callback $s OPEN
+}
+
+# ::sensml::end -- End array parsing
+#
+#       This procedure ends the current JSON array and cleans transient state.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#
+# Results:
+#       None
+#
+# Side Effects:
+#       Will call the callback associated to the context as many times as needed
+proc ::sensml::end { s } {
+  Callback $s CLOSE
+  dict set S remainder ""
+}
+
+
+# ::sensml::Init -- (re)initialise context
+#
+#       This procedure (re)initialise a parsing context by clearing out the
+#       value of all base fields.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#
+# Results:
+#       None
+#
+# Side Effects:
+#       Clear out base fields value
 proc ::sensml::Init { s } {
   upvar \#0 $s S
 
@@ -154,11 +297,46 @@ proc ::sensml::Init { s } {
   }
 }
 
-proc ::sensml::Pack { s json } {
+
+# ::sensml::jsonpack -- Process one JSON object pack
+#
+#       This procedure processes a single JSON object pack and performs a
+#       callback with all resolved values.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  json	Valid JSON object
+#
+# Results:
+#       None
+#
+# Side Effects:
+#       Will call the callback associated to the context as many times as needed
+proc ::sensml::jsonpack { s json } {
+  Log $s TRACE "JSON Pack: $json"
+  # Parse incoming JSON as a Tcl dictionary and pass it along to dictpack which
+  # will perform all the work.
+  dictpack [::json::json2dict $json]
+}
+
+
+# ::sensml::dictpack -- Process one dictionary, representing a JSON object pack
+#
+#       This procedure processes a dictionary representing a JSON object pack
+#       and performs a callback with all resolved values.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  d	    Tcl dictionary
+#
+# Results:
+#       None
+#
+# Side Effects:
+#       Will call the callback associated to the context as many times as needed
+proc ::sensml::dictpack { s d } {
   upvar \#0 $s S
 
-  # Parse the JSON Pack properly
-  set d [::json::json2dict $json]
   Log $s TRACE "JSON Pack: $d"
 
   # Set and remember base fields that would be present in the pack.
@@ -253,6 +431,22 @@ proc ::sensml::Pack { s json } {
 }
 
 
+# ::sensml::Base -- Value of a base field
+#
+#       This procedure computes the value of a base field. If the field has been
+#       set in the past within the parsing context, the value will be taken from
+#       the context. Otherwise, if it is known, the value will be taken from the
+#       default values.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  f	    Name of field, needs to start with b
+#
+# Results:
+#       Value of field, empty for all unknown base fields.
+#
+# Side Effects:
+#       None
 proc ::sensml::Base { s f } {
   upvar \#0 $s S
 
@@ -273,10 +467,10 @@ proc ::sensml::Base { s f } {
 #       From http://wiki.tcl.tk/17342
 #
 # Arguments:
-#	_argv	"pointer" to incoming arguments
-#	name	Name of option to extract
-#	_var	Pointer to variable to set
-#	default	Default value
+#	  _argv	  "pointer" to incoming arguments
+#	  name	  Name of option to extract
+#	  _var	  Pointer to variable to set
+#	  default	Default value
 #
 # Results:
 #       1 if the option was found, 0 otherwise
@@ -308,9 +502,9 @@ proc ::sensml::getopt {_argv name {_var ""} {default ""} } {
 #       defaults, and the procedure will capture these from the arguments.
 #
 # Arguments:
-#	cx_	"Pointer" to dictionary to initialise and parse options in.
-#	ns	Namespace (FQ or relative to caller) where to get options from
-#	args	List of dashled options and arguments, must match content of namespace
+#	  cx_	  "Pointer" to dictionary to initialise and parse options in.
+#	  ns	  Namespace (FQ or relative to caller) where to get options from
+#	  args	List of dashled options and arguments, must match content of namespace
 #
 # Results:
 #       Return the list of options that were taken from the arguments, an error
@@ -344,8 +538,8 @@ proc ::sensml::defaults { cx_ ns args } {
 #       an option starts with a dash to work properly.
 #
 # Arguments:
-#	args_	Pointer to list of arguments (will be modified!)
-#	opts_	Pointer to list of options
+#	  args_	  Pointer to list of arguments (will be modified!)
+#	  opts_	  Pointer to list of options
 #
 # Results:
 #       None.
@@ -379,6 +573,23 @@ proc ::sensml::isolate { args_ opts_ } {
   }
 }
 
+
+# ::sensml::Dispatch -- Objectifying proc.
+#
+#       Dispatch to the procedure matching the command. Uses tailcall for
+#       optimisation. This implements the Tk-style calling conventions on
+#       contexts.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  cmd	  Name of command to call, needs to be a first order proc in namespace.
+#	  args	Arguments to procedure, passed blindly to proc.
+#
+# Results:
+#       None.
+#
+# Side Effects:
+#       Replaces current call by call to procedure (tailcall)
 proc ::sensml::Dispatch { s cmd args } {
   # Try finding the command as one of our internally implemented procedures.
   if { [string tolower $cmd] eq $cmd } {
@@ -390,6 +601,20 @@ proc ::sensml::Dispatch { s cmd args } {
 }
 
 
+# ::sensml::Callback -- Controlled callbacking.
+#
+#       Perform callbacks, don't bail out on errors, rather scream in log.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  step	Parsing step.
+#	  args	Arguments to procedure, passed blindly to callback command
+#
+# Results:
+#       None.
+#
+# Side Effects:
+#       Catches errors and sends them to log
 proc ::sensml::Callback { s step args } {
   upvar \#0 $s S
 
@@ -401,6 +626,21 @@ proc ::sensml::Callback { s step args } {
   }
 }
 
+
+# ::sensml::Log -- Conditional logging
+#
+#       Logs depending on the current log level of the context.
+#
+# Arguments:
+#	  s	    Identifier of a parsing context, as returned by new
+#	  lvl	  Level of the message.
+#	  msg	  Message to log
+#
+# Results:
+#       None.
+#
+# Side Effects:
+#       Print formatted message to -log file descriptor if relevant.
 proc ::sensml::Log { s lvl msg } {
   upvar \#0 $s S
   if { [dict get $S -log] ne "" } {

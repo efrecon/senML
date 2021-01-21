@@ -1,3 +1,5 @@
+#!/usr/bin/env tclsh
+
 lappend auto_path [file join [file dirname [info script]] ..]
 package require senml
 
@@ -17,9 +19,9 @@ set json {
 }
 
 
-proc datapoint { s step args } {
+proc datapoint { s step {pack {}} } {
   if { $step eq "PACK" } {
-    dict for {k v} [lindex $args 0] {
+    dict for {k v} $pack {
       puts "$k => $v"
     }
     puts ""
