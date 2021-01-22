@@ -23,10 +23,11 @@ A number of examples are provided in the [demos] directory.
 
 ### SenSML
 
-Use the `sensml` command to create a new SenSML parsing context, the command
-takes a number of dash-led options to control its behaviour. The command will
-return a token which is also a command, to be used for all further operation
-within this context, Tk-style. Dash-led options are:
+The library exports a single command for use: `senSML`. Use the `senSML` command
+to create a new SenSML parsing context, the command takes a number of dash-led
+options to control its behaviour. The command will return a token which is also
+a command, to be used for all further operation within this context, Tk-style.
+Dash-led options are:
 
 * `-version`: the version of the data that a context will accepts. This will be
   checked against the base version, [`bver`][bver]. This defaults to `10` to
@@ -60,7 +61,7 @@ In the first mode of operation, you iteratively feed the context with blocks of
 partial JSON, as data is coming from the source. The parser will use textual
 heuristics at the string level to cut incoming data into some blocks that can be
 understood as JSON. In practice, there is a possibility for these heuristics to
-fail. Provided the variable `s` is a context returned by `sensml`, and `data` is
+fail. Provided the variable `s` is a context returned by `senSML`, and `data` is
 a possibly incomplete block containing partial JSON, you can iteratively push
 data to the parser using the `stream` sub-command with the `data` block:
 
@@ -109,18 +110,34 @@ representing the JSON object to parse.
 
 ### SenML
 
-The [SenML] library implements an ensemble. The core of the library is a stream
-parser. To parse a JSON array in SenML format and generate callbacks with Tcl
-dictionaries representing the [resolved][resolve] [packs][pack] from the
-original array, call the command `senml streamer`. The command takes the same
-dash-led options as the main [`sensml`](#sensml) command.
+The [SenML] library implements an ensemble under the `senML` command. The core
+of the library is a stream parser. To parse a JSON array in SenML format and
+generate callbacks with Tcl dictionaries representing the [resolved][resolve]
+[packs][pack] from the original array, call the command `senML streamer`. The
+command takes the same dash-led options as the main [`senSML`](#sensml) command.
 
 To resolve a JSON array, i.e. generate a JSON array where the value of all base
 fields have been integrated into the value of the fields and all time values are
-absolute, call the command `senml resolve`. The command takes the same dash-led
-options as the main [`sensml`](#sensml) command, at the exception of the
+absolute, call the command `senML resolve`. The command takes the same dash-led
+options as the main [`senSML`](#sensml) command, at the exception of the
 `-callback` option which is used internally for the reconstruction of the JSON
 array.
+
+Similarly, `senML parse` will parse the JSON array passed as an argument and
+return a list of dictionaries, one for each original [pack], but
+[resolved][resolve]. The command also takes dash-led options.
+
+## Tests
+
+This library comes with a number of [tests]. To run them all, on a UNIX platform
+with Tcl and Tcllib installed, the following command should be enough. The tests
+are based on all the examples from the [RFC][SenML].
+
+```shell
+./tests/all.tcl
+```
+
+  [tests]: ./tests/
 
 ## Acknowledgments
 

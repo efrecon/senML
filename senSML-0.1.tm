@@ -1,7 +1,7 @@
 package require Tcl 8.6
 package require json
 
-namespace eval ::sensml {
+namespace eval ::senSML {
   namespace eval vars {
     variable id 0;        # Identifier generator
     # Known base fields and their default values.
@@ -34,7 +34,7 @@ namespace eval ::sensml {
   }
 
   # defaults for all new streams
-  namespace eval sensml {
+  namespace eval senSML {
     variable -log stderr;       # Log stream, empty to switch off
     variable -level WARN;       # loglevel
     variable -callback  ""
@@ -48,7 +48,7 @@ namespace eval ::sensml {
 }
 
 
-# ::sensml::new -- Create parsing context.
+# ::senSML::new -- Create parsing context.
 #
 #       This procedure creates a SenSML parsing context and is the only command
 #       exported by this parser. The command returns an identifier to the
@@ -67,14 +67,14 @@ namespace eval ::sensml {
 #
 # Side Effects:
 #       None.
-proc ::sensml::new { args } {
+proc ::senSML::new { args } {
   # Create new stream object
   set s [namespace current]::[incr vars::id]
   upvar \#0 $s S
 
   # Capture arguments and give good defaults into the stread object (a
   # dictionary). Create the command
-  defaults S sensml
+  defaults S senSML
   configure $s {*}$args
   interp alias {} $s {} [namespace current]::Dispatch $s
 
@@ -87,7 +87,7 @@ proc ::sensml::new { args } {
 }
 
 
-# ::sensml::close -- (force-)close current array
+# ::senSML::close -- (force-)close current array
 #
 #       This procedure closes the current array in progress, if any. It will
 #       reset the value of all base fields in preparation for the next array, if
@@ -102,13 +102,13 @@ proc ::sensml::new { args } {
 #
 # Side Effects:
 #       None.
-proc ::sensml::close { s } {
+proc ::senSML::close { s } {
   end $s
   Init $s
 }
 
 
-# ::sensml::delete -- delete parsing context
+# ::senSML::delete -- delete parsing context
 #
 #       This procedure deletes a parsing context and removes it from memory. The
 #       current array is forced closed before deletion..
@@ -121,13 +121,13 @@ proc ::sensml::close { s } {
 #
 # Side Effects:
 #       None.
-proc ::sensml::delete { s } {
+proc ::senSML::delete { s } {
   close $s
   unset $s
 }
 
 
-# ::sensml::configure -- (re)configure a parsing context
+# ::senSML::configure -- (re)configure a parsing context
 #
 #       This procedure changes the values of one of the dash-led options for the
 #       context.
@@ -142,7 +142,7 @@ proc ::sensml::delete { s } {
 #
 # Side Effects:
 #       None.
-proc ::sensml::configure { s args } {
+proc ::senSML::configure { s args } {
   upvar \#0 $s S
 
   foreach {opt val} $args {
@@ -168,7 +168,7 @@ proc ::sensml::configure { s args } {
 }
 
 
-# ::sensml::stream -- Push incomplete JSON for continuous parsing.
+# ::senSML::stream -- Push incomplete JSON for continuous parsing.
 #
 #       This procedure accepts possibly incomplete JSON and will isolate the
 #       beginning of arrays and cut the remaining into separated JSON objects to
@@ -184,7 +184,7 @@ proc ::sensml::configure { s args } {
 #
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
-proc ::sensml::stream { s json } {
+proc ::senSML::stream { s json } {
   upvar \#0 $s S
 
   # Nothing to do on empty input
@@ -241,7 +241,7 @@ proc ::sensml::stream { s json } {
 }
 
 
-# ::sensml::begin -- Begin array parsing
+# ::senSML::begin -- Begin array parsing
 #
 #       This procedure (re)initialise the parsing context and starts a new array
 #       of JSON object packs.
@@ -254,7 +254,7 @@ proc ::sensml::stream { s json } {
 #
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
-proc ::sensml::begin { s } {
+proc ::senSML::begin { s } {
   upvar \#0 $s S
 
   Init $s
@@ -262,7 +262,7 @@ proc ::sensml::begin { s } {
   dict set S closed 0
 }
 
-# ::sensml::end -- End array parsing
+# ::senSML::end -- End array parsing
 #
 #       This procedure ends the current JSON array and cleans transient state.
 #
@@ -274,7 +274,7 @@ proc ::sensml::begin { s } {
 #
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
-proc ::sensml::end { s } {
+proc ::senSML::end { s } {
   upvar \#0 $s S
   if { ![dict get $S closed] } {
     Callback $s CLOSE
@@ -284,7 +284,7 @@ proc ::sensml::end { s } {
 }
 
 
-# ::sensml::Init -- (re)initialise context
+# ::senSML::Init -- (re)initialise context
 #
 #       This procedure (re)initialise a parsing context by clearing out the
 #       value of all base fields.
@@ -297,7 +297,7 @@ proc ::sensml::end { s } {
 #
 # Side Effects:
 #       Clear out base fields value
-proc ::sensml::Init { s } {
+proc ::senSML::Init { s } {
   upvar \#0 $s S
 
   dict for {base init} $vars::base {
@@ -308,7 +308,7 @@ proc ::sensml::Init { s } {
 }
 
 
-# ::sensml::jsonpack -- Process one JSON object pack
+# ::senSML::jsonpack -- Process one JSON object pack
 #
 #       This procedure processes a single JSON object pack and performs a
 #       callback with all resolved values.
@@ -322,7 +322,7 @@ proc ::sensml::Init { s } {
 #
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
-proc ::sensml::jsonpack { s json } {
+proc ::senSML::jsonpack { s json } {
   # Nothing to do on empty input
   if { $json eq "" } {
     return
@@ -335,7 +335,7 @@ proc ::sensml::jsonpack { s json } {
 }
 
 
-# ::sensml::dictpack -- Process one dictionary, representing a JSON object pack
+# ::senSML::dictpack -- Process one dictionary, representing a JSON object pack
 #
 #       This procedure processes a dictionary representing a JSON object pack
 #       and performs a callback with all resolved values.
@@ -349,7 +349,7 @@ proc ::sensml::jsonpack { s json } {
 #
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
-proc ::sensml::dictpack { s d } {
+proc ::senSML::dictpack { s d } {
   upvar \#0 $s S
 
   Log $s TRACE "JSON Pack: $d"
@@ -453,7 +453,7 @@ proc ::sensml::dictpack { s d } {
 }
 
 
-# ::sensml::Base -- Value of a base field
+# ::senSML::Base -- Value of a base field
 #
 #       This procedure computes the value of a base field. If the field has been
 #       set in the past within the parsing context, the value will be taken from
@@ -469,7 +469,7 @@ proc ::sensml::dictpack { s d } {
 #
 # Side Effects:
 #       None
-proc ::sensml::Base { s f } {
+proc ::senSML::Base { s f } {
   upvar \#0 $s S
 
   if { [dict exists $S $f] } {
@@ -484,7 +484,7 @@ proc ::sensml::Base { s f } {
   return "";  # Default for unknown base fields
 }
 
-# ::sensml::getopt -- Get options
+# ::senSML::getopt -- Get options
 #
 #       From http://wiki.tcl.tk/17342
 #
@@ -499,7 +499,7 @@ proc ::sensml::Base { s f } {
 #
 # Side Effects:
 #       None.
-proc ::sensml::getopt {_argv name {_var ""} {default ""} } {
+proc ::senSML::getopt {_argv name {_var ""} {default ""} } {
   upvar 1 $_argv argv $_var var
   set pos [lsearch -regexp $argv ^$name]
   if {$pos>=0} {
@@ -516,7 +516,7 @@ proc ::sensml::getopt {_argv name {_var ""} {default ""} } {
 }
 
 
-# ::sensml::defaults -- Init and option parsing based on namespace.
+# ::senSML::defaults -- Init and option parsing based on namespace.
 #
 #       This procedure takes the dashled variables of a given (sub)namespace to
 #       initialise a dictionary. These variables are considered as being the
@@ -535,7 +535,7 @@ proc ::sensml::getopt {_argv name {_var ""} {default ""} } {
 #
 # Side Effects:
 #       None.
-proc ::sensml::defaults { cx_ ns args } {
+proc ::senSML::defaults { cx_ ns args } {
   upvar $cx_ CX
 
   set parsed [list]
@@ -551,7 +551,7 @@ proc ::sensml::defaults { cx_ ns args } {
 }
 
 
-# ::sensml::isolate -- Isolate options from arguments
+# ::senSML::isolate -- Isolate options from arguments
 #
 #       Isolate dash-led options from the rest of the arguments. This procedure
 #       prefers the double-dash as a marker between the options and the
@@ -569,7 +569,7 @@ proc ::sensml::defaults { cx_ ns args } {
 # Side Effects:
 #       Modifies the args and opts lists that are passed as parameters to
 #       reflect the arguments and the options.
-proc ::sensml::isolate { args_ opts_ } {
+proc ::senSML::isolate { args_ opts_ } {
   upvar $args_ args $opts_ opts
   set idx [lsearch $args "--"]
   if { $idx >= 0 } {
@@ -596,7 +596,7 @@ proc ::sensml::isolate { args_ opts_ } {
 }
 
 
-# ::sensml::Dispatch -- Objectifying proc.
+# ::senSML::Dispatch -- Objectifying proc.
 #
 #       Dispatch to the procedure matching the command. Uses tailcall for
 #       optimisation. This implements the Tk-style calling conventions on
@@ -612,7 +612,7 @@ proc ::sensml::isolate { args_ opts_ } {
 #
 # Side Effects:
 #       Replaces current call by call to procedure (tailcall)
-proc ::sensml::Dispatch { s cmd args } {
+proc ::senSML::Dispatch { s cmd args } {
   # Try finding the command as one of our internally implemented procedures.
   if { [string tolower $cmd] eq $cmd } {
     if { [llength [info commands [namespace current]::$cmd]] } {
@@ -623,7 +623,7 @@ proc ::sensml::Dispatch { s cmd args } {
 }
 
 
-# ::sensml::Callback -- Controlled callbacking.
+# ::senSML::Callback -- Controlled callbacking.
 #
 #       Perform callbacks, don't bail out on errors, rather scream in log.
 #
@@ -637,7 +637,7 @@ proc ::sensml::Dispatch { s cmd args } {
 #
 # Side Effects:
 #       Catches errors and sends them to log
-proc ::sensml::Callback { s step args } {
+proc ::senSML::Callback { s step args } {
   upvar \#0 $s S
 
   Log $s DEBUG "Callback: $step $args"
@@ -649,7 +649,7 @@ proc ::sensml::Callback { s step args } {
 }
 
 
-# ::sensml::Log -- Conditional logging
+# ::senSML::Log -- Conditional logging
 #
 #       Logs depending on the current log level of the context.
 #
@@ -663,7 +663,7 @@ proc ::sensml::Callback { s step args } {
 #
 # Side Effects:
 #       Print formatted message to -log file descriptor if relevant.
-proc ::sensml::Log { s lvl msg } {
+proc ::senSML::Log { s lvl msg } {
   upvar \#0 $s S
   if { [dict get $S -log] ne "" } {
     set lvl [string tolower $lvl]
@@ -673,4 +673,4 @@ proc ::sensml::Log { s lvl msg } {
   }
 }
 
-package provide SenSML $::sensml::vars::version
+package provide senSML $::senSML::vars::version
