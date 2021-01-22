@@ -1,7 +1,7 @@
 #!/usr/bin/env tclsh
 
 lappend auto_path [file join [file dirname [info script]] ..]
-package require senml
+package require SenML
 
 # From https://tools.ietf.org/html/rfc8428#section-5.1.2
 set json {
@@ -28,4 +28,4 @@ proc datapoint { s step {pack {}} } {
   }
 }
 
-senml parse $json -callback datapoint
+senml stream $json -callback datapoint

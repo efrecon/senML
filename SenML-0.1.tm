@@ -1,6 +1,6 @@
 package require Tcl 8.6
 package require json
-package require sensml
+package require SenSML
 
 namespace eval ::senml {
   namespace eval vars {
@@ -26,7 +26,12 @@ namespace eval ::senml {
 #
 # Side Effects:
 #       Will callback the command at -callback as parsing progresses
-proc ::senml::parse { json args } {
+proc ::senml::stream { json args } {
+  # Nothing to do on empty input
+  if { $json eq "" } {
+    return
+  }
+
   # Create a SenSML context, pass it all arguments.
   set s [sensml {*}$args]
 
@@ -72,7 +77,7 @@ proc ::senml::resolve { json args } {
   set resolved ""
 
   # Parse JSON, passing the global string to convert back to JSON progressively.
-  parse $json -callback [list ::senml::Resolver $j] {*}$args
+  stream $json -callback [list ::senml::ResolverJSON $j] {*}$args
 
   # Copy global string to local var to be able to return it
   # after we've unset the global to avoid leaking memory.
@@ -80,6 +85,29 @@ proc ::senml::resolve { json args } {
   unset $j
 
   return $str; # Return the resolved JSON array.
+}
+
+
+proc ::senml::parse { json args } {
+  if { [lsearch $args -callback] >= 0 } {
+    return -code error "Cannot provide a callback when resolving to dictionaries!"
+  }
+
+  # Generate a unique list identifier that will be passed to each callback to
+  # collect resolved data in a list
+  set l [namespace current]::[incr vars::id]
+  upvar \#0 $l resolved
+  set resolved [list]
+
+  # Parse JSON, passing the global list to store dictionaries.
+  stream $json -callback [list ::senml::ResolverList $l] {*}$args
+
+  # Copy global string to local var to be able to return it
+  # after we've unset the global to avoid leaking memory.
+  set L [set $l]
+  unset $l
+
+  return $L; # Return the resolved list
 }
 
 
@@ -147,7 +175,7 @@ proc ::senml::pack2json { p } {
 #
 # Side Effects:
 #       Reconstruct JSON in j
-proc ::senml::Resolver { j s step { pack {} } } {
+proc ::senml::ResolverJSON { j s step { pack {} } } {
   upvar \#0 $j json
   switch -- $step {
     OPEN {
@@ -163,4 +191,11 @@ proc ::senml::Resolver { j s step { pack {} } } {
   }
 }
 
-package provide senml $::senml::vars::version
+proc ::senml::ResolverList { l s step { pack {} } } {
+  upvar \#0 $l L
+
+  if { $step eq "PACK" } {
+    lappend L $pack
+  }
+}
+package provide SenML $::senml::vars::version

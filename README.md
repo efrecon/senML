@@ -109,11 +109,11 @@ representing the JSON object to parse.
 
 ### SenML
 
-The [SenML] library implements an ensemble. To parse a JSON array in SenML
-format and generate callbacks with Tcl dictionaries representing the
-[resolved][resolve] [packs][pack] from the original array, call the command
-`senml parse`. The command takes the same dash-led options as the main
-[`sensml`](#sensml) command.
+The [SenML] library implements an ensemble. The core of the library is a stream
+parser. To parse a JSON array in SenML format and generate callbacks with Tcl
+dictionaries representing the [resolved][resolve] [packs][pack] from the
+original array, call the command `senml streamer`. The command takes the same
+dash-led options as the main [`sensml`](#sensml) command.
 
 To resolve a JSON array, i.e. generate a JSON array where the value of all base
 fields have been integrated into the value of the fields and all time values are

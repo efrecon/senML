@@ -1,0 +1,245 @@
+# Note that a large number of these tests are based on the various examples of
+# RFC8428
+
+if {"::tcltest" ni [namespace children]} {
+    package require tcltest 2
+    namespace import -force ::tcltest::*
+}
+
+::tcl::tm::path add [file normalize [file join [file dirname [info script]] ..]]
+package require SenML
+package require lambda
+
+# Source package for equality of list of dictionaries
+source [file join [file dirname [info script]] ldict.tcl]
+
+# Define a customMatch for booleans it makes test more readable
+customMatch boolean [lambda {expected actual} {
+  if { [string is true $expected] && [string is true $actual] } { return 1 }
+  if { [string is false $expected] && [string is false $actual] } { return 1 }
+  return 0
+}]
+
+
+test empty-parse-1 {Testing parsing empty string} -body {
+  senml resolve ""
+} -result ""
+
+test empty-parse-2 {Testing parsing empty array} -body {
+  senml resolve {[]}
+} -result {[]}
+
+
+# The list of tests below matches one-to-one with all the examples in the RFC,
+# from top to bottom and in same order.
+
+test rfc-two-measurements {Testing two measurements} -match boolean -body {
+  set json {
+    [
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,
+      "v":23.5},
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,
+      "v":23.6}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
+    { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+  }
+} -result true
+
+test rfc-basename {Base name avoids repetition} -match boolean -body {
+  set json {
+    [
+      {"bn":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,
+      "v":23.5},
+      {"u":"Cel","t":1.276020091e+09,
+      "v":23.6}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
+    { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+  }
+} -result true
+
+# As time gets automatically added, there is a tiny chance that this test fails
+# even though it is correct, i.e. just at the crossing between seconds. Hard to
+# do things differently though.
+test rfc-time-now {Now time added} -match boolean -body {
+  set json {
+    [
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","v":23.1}
+    ]
+  }
+  ldict equal [senml parse $json] [list \
+    [list n "urn:dev:ow:10e2073a01080063" u Cel t [clock seconds] v 23.1 ]]
+} -result true
+
+test rfc-multi-points-1 {Multi-points with field override} -match boolean -body {
+  set json {
+    [
+      {"bn":"urn:dev:ow:10e2073a01080063:","n":"voltage","u":"V","v":120.1},
+      {"n":"current","u":"A","v":1.2}
+    ]
+  }
+  set now [clock seconds]
+  ldict equal [senml parse $json] [list \
+    [list n "urn:dev:ow:10e2073a01080063:voltage" u V t $now v 120.1 ] \
+    [list n "urn:dev:ow:10e2073a01080063:current" u A t $now v 1.2 ] \
+    ]
+} -result true
+
+test rfc-multi-points-2 {Multi-points with relative times} -match boolean -body {
+  set json {
+    [
+      {"bn":"urn:dev:ow:10e2073a0108006:","bt":1.276020076001e+09,
+      "bu":"A","bver":5,
+      "n":"voltage","u":"V","v":120.1},
+      {"n":"current","t":-5,"v":1.2},
+      {"n":"current","t":-4,"v":1.3},
+      {"n":"current","t":-3,"v":1.4},
+      {"n":"current","t":-2,"v":1.5},
+      {"n":"current","t":-1,"v":1.6},
+      {"n":"current","v":1.7}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    { n "urn:dev:ow:10e2073a0108006:voltage" u V t 1276020076.001 v 120.1 }
+    { n "urn:dev:ow:10e2073a0108006:current" u A t 1276020071.001 v 1.2 }
+    { n "urn:dev:ow:10e2073a0108006:current" u A t 1276020072.001 v 1.3 }
+    { n "urn:dev:ow:10e2073a0108006:current" u A t 1276020073.001 v 1.4 }
+    { n "urn:dev:ow:10e2073a0108006:current" u A t 1276020074.001 v 1.5 }
+    { n "urn:dev:ow:10e2073a0108006:current" u A t 1276020075.001 v 1.6 }
+    { n "urn:dev:ow:10e2073a0108006:current" u A t 1276020076.001 v 1.7 }
+  }
+} -result true
+
+test rfc-multi-points-2 {Multi-points with relative times} -match boolean -body {
+  set json {
+    [
+      {"bn":"urn:dev:ow:10e2073a01080063","bt":1.320067464e+09,
+      "bu":"%RH","v":21.2},
+      {"t":10,"v":21.3},
+      {"t":20,"v":21.4},
+      {"t":30,"v":21.4},
+      {"t":40,"v":21.5},
+      {"t":50,"v":21.5},
+      {"t":60,"v":21.5},
+      {"t":70,"v":21.6},
+      {"t":80,"v":21.7}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1.320067464e+09 v 21.2 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067474.0 v 21.3 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067484.0 v 21.4 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067494.0 v 21.4 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067504.0 v 21.5 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067514.0 v 21.5 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067524.0 v 21.5 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067534.0 v 21.6 }
+    { n "urn:dev:ow:10e2073a01080063" u %RH t 1320067544.0 v 21.7 }
+  }
+} -result true
+
+test rfc-multi-measurements {Multi-points with relative times} -match boolean -body {
+  set json {
+    [
+      {"bn":"urn:dev:ow:10e2073a01080063","bt":1.320067464e+09,
+      "bu":"%RH","v":20},
+      {"u":"lon","v":24.30621},
+      {"u":"lat","v":60.07965},
+      {"t":60,"v":20.3},
+      {"u":"lon","t":60,"v":24.30622},
+      {"u":"lat","t":60,"v":60.07965},
+      {"t":120,"v":20.7},
+      {"u":"lon","t":120,"v":24.30623},
+      {"u":"lat","t":120,"v":60.07966},
+      {"u":"%EL","t":150,"v":98},
+      {"t":180,"v":21.2},
+      {"u":"lon","t":180,"v":24.30628},
+      {"u":"lat","t":180,"v":60.07967}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    {n urn:dev:ow:10e2073a01080063 u %RH t 1.320067464e+09 v 20}
+    {n urn:dev:ow:10e2073a01080063 u lon t 1.320067464e+09 v 24.30621}
+    {n urn:dev:ow:10e2073a01080063 u lat t 1.320067464e+09 v 60.07965}
+    {n urn:dev:ow:10e2073a01080063 u %RH t 1.320067524e+09 v 20.3}
+    {n urn:dev:ow:10e2073a01080063 u lon t 1.320067524e+09 v 24.30622}
+    {n urn:dev:ow:10e2073a01080063 u lat t 1.320067524e+09 v 60.07965}
+    {n urn:dev:ow:10e2073a01080063 u %RH t 1.320067584e+09 v 20.7}
+    {n urn:dev:ow:10e2073a01080063 u lon t 1.320067584e+09 v 24.30623}
+    {n urn:dev:ow:10e2073a01080063 u lat t 1.320067584e+09 v 60.07966}
+    {n urn:dev:ow:10e2073a01080063 u %EL t 1.320067614e+09 v 98}
+    {n urn:dev:ow:10e2073a01080063 u %RH t 1.320067644e+09 v 21.2}
+    {n urn:dev:ow:10e2073a01080063 u lon t 1.320067644e+09 v 24.30628}
+    {n urn:dev:ow:10e2073a01080063 u lat t 1.320067644e+09 v 60.07967}
+  }
+} -result true
+
+test rfc-multi-data-types {Multiple data types (time added comp. with RFC)} -match boolean -body {
+  set json {
+    [
+      {"bn":"urn:dev:ow:10e2073a01080063:","bt":1.320067464e+09,"n":"temp","u":"Cel","v":23.1},
+      {"n":"label","vs":"Machine Room"},
+      {"n":"open","vb":false},
+      {"n":"nfc-reader","vd":"aGkgCg"}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    {n urn:dev:ow:10e2073a01080063:temp u Cel t 1.320067464e+09 v 23.1}
+    {n urn:dev:ow:10e2073a01080063:label t 1.320067464e+09 vs "Machine Room"}
+    {n urn:dev:ow:10e2073a01080063:open t 1.320067464e+09 vb false}
+    {n urn:dev:ow:10e2073a01080063:nfc-reader t 1.320067464e+09 vd "aGkgCg"}
+  }
+} -result true
+
+test rfc-actuator-thermostat {Setting thermostat} -match boolean -body {
+  set json {
+    [
+      {"bn":"urn:dev:ow:10e2073a01080063:"},
+      {"n":"temp","u":"Cel","v":23.1},
+      {"n":"heat","u":"/","v":1},
+      {"n":"fan","u":"/","v":0}
+    ]
+  }
+  set now [clock seconds]
+  ldict equal [senml parse $json] [list \
+    [list n "urn:dev:ow:10e2073a01080063:temp" u Cel t $now v 23.1 ] \
+    [list n "urn:dev:ow:10e2073a01080063:heat" u / t $now v 1 ] \
+    [list n "urn:dev:ow:10e2073a01080063:fan" u / t $now v 0 ] \
+    ]
+} -result true
+
+test rfc-actuator-lights-1 {Setting lights } -match boolean -body {
+  set json {
+    [
+      {"bt":1.320078429e+09,"bu":"/","n":"2001:db8::3","v":1},
+      {"n":"2001:db8::4","v":1}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    {n 2001:db8::3 u / t 1.320078429e+09 v 1}
+    {n 2001:db8::4 u / t 1.320078429e+09 v 1}
+  }
+} -result true
+
+test rfc-actuator-lights-2 {Turn off lights } -match boolean -body {
+  set json {
+    [
+      {"bt":1.320078429e+09,"bu":"/","n":"2001:db8::3","v":0.5},
+      {"n":"2001:db8::4","v":0.5},
+      {"n":"2001:db8::3","t":0.1,"v":0},
+      {"n":"2001:db8::4","t":0.1,"v":0}
+    ]
+  }
+  ldict equal [senml parse $json] {
+    {n 2001:db8::3 u / t 1.320078429e+09 v 0.5}
+    {n 2001:db8::4 u / t 1.320078429e+09 v 0.5}
+    {n 2001:db8::3 u / t 1320078429.1 v 0}
+    {n 2001:db8::4 u / t 1320078429.1 v 0}
+  }
+} -result true
+

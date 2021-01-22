@@ -80,6 +80,7 @@ proc ::sensml::new { args } {
 
   # Initialise the internal state of the stream
   dict set S remainder ""
+  dict set S closed 0
   Init $s
 
   return $s
@@ -102,10 +103,7 @@ proc ::sensml::new { args } {
 # Side Effects:
 #       None.
 proc ::sensml::close { s } {
-  upvar \#0 $s S
-
-  Callback $s CLOSE
-  dict set S remainder ""
+  end $s
   Init $s
 }
 
@@ -189,6 +187,11 @@ proc ::sensml::configure { s args } {
 proc ::sensml::stream { s json } {
   upvar \#0 $s S
 
+  # Nothing to do on empty input
+  if { $json eq "" } {
+    return
+  }
+
   # Append remainder of previous part of stream, if any
   if { [dict get $S remainder] ne "" } {
     set json [dict get $S remainder]$json
@@ -252,8 +255,11 @@ proc ::sensml::stream { s json } {
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
 proc ::sensml::begin { s } {
+  upvar \#0 $s S
+
   Init $s
   Callback $s OPEN
+  dict set S closed 0
 }
 
 # ::sensml::end -- End array parsing
@@ -269,8 +275,12 @@ proc ::sensml::begin { s } {
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
 proc ::sensml::end { s } {
-  Callback $s CLOSE
-  dict set S remainder ""
+  upvar \#0 $s S
+  if { ![dict get $S closed] } {
+    Callback $s CLOSE
+    dict set S remainder ""
+    dict set S closed 1
+  }
 }
 
 
@@ -313,6 +323,11 @@ proc ::sensml::Init { s } {
 # Side Effects:
 #       Will call the callback associated to the context as many times as needed
 proc ::sensml::jsonpack { s json } {
+  # Nothing to do on empty input
+  if { $json eq "" } {
+    return
+  }
+
   Log $s TRACE "JSON Pack: $json"
   # Parse incoming JSON as a Tcl dictionary and pass it along to dictpack which
   # will perform all the work.
@@ -338,6 +353,7 @@ proc ::sensml::dictpack { s d } {
   upvar \#0 $s S
 
   Log $s TRACE "JSON Pack: $d"
+  dict set S closed 0
 
   # Set and remember base fields that would be present in the pack.
   dict for {f v} $d {
@@ -378,6 +394,12 @@ proc ::sensml::dictpack { s d } {
           dict set pack $f $v
         }
       }
+    }
+
+    # If we only have base fields, nothing more should be done. See example in
+    # section 5.1.7 in RFC 8428.
+    if { [dict size [dict filter $d key b*]] == [dict size $d] } {
+      return
     }
 
     # Set base fields that are explicitely set for the stream, but not for this
@@ -651,4 +673,4 @@ proc ::sensml::Log { s lvl msg } {
   }
 }
 
-package provide sensml $::sensml::vars::version
+package provide SenSML $::sensml::vars::version

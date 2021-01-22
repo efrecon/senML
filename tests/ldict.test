@@ -1,0 +1,117 @@
+# This is a test for the package that is used in the other tests... We have to
+# strictly ensure our tests will be valid!
+
+if {"::tcltest" ni [namespace children]} {
+    package require tcltest 2
+    namespace import -force ::tcltest::*
+}
+
+package require lambda
+
+source [file join [file dirname [info script]] ldict.tcl]
+
+
+# Define a customMatch for booleans so we ensure the result of equality calls
+# actually are booleans (and we don't assume they return 0 or 1 as we would have
+# to do when using -match exact below)
+customMatch boolean [lambda {expected actual} {
+  if { [string is true $expected] && [string is true $actual] } { return 1 }
+  if { [string is false $expected] && [string is false $actual] } { return 1 }
+  return 0
+}]
+
+
+# Tests for the deq sub-command, which is used underneath by the equal
+# sub-command.
+test deq-empty-equal { Test empty dictionaries are equal } -match boolean -body {
+  ldict deq [dict create] [dict create]
+} -result true
+
+test deq-same-dict { Test twice same dictionary equals } -match boolean -body {
+  set d { a 1 b 2 c 3 }
+  ldict deq $d $d
+} -result true
+
+test deq-unordered { Test same unordered dictionaries equals } -match boolean -body {
+  ldict deq \
+    { a 1 b 2 c 3 } \
+    { a 1 c 3 b 2 }
+} -result true
+
+test deq-diff-size-1 { Test different sized dictionaries different } -match boolean -body {
+  ldict deq \
+    { a 1 b 2 c 3 } \
+    { a 1 c 3 }
+} -result false
+
+test deq-diff-size-2 { Test empty against dictionary different } -match boolean -body {
+  ldict deq \
+    { a 1 b 2 c 3 } \
+    {}
+} -result false
+
+test deq-boolean-equality-1 { Test boolean equality } -match boolean -body {
+  ldict deq \
+    { a 1 b 2 c 3 } \
+    { a true b 2 c 3 }
+} -result true
+
+test deq-boolean-equality-2 { Test boolean equality } -match boolean -body {
+  ldict deq \
+    { a on b 2 c 3 } \
+    { a true b 2 c 3 }
+} -result true
+
+test deq-boolean-equality-3 { Test boolean equality } -match boolean -body {
+  ldict deq \
+    { a yes b 2 c 3 } \
+    { a true b 2 c 3 }
+} -result true
+
+test deq-double-representation-1 { Test double representation equality } -match boolean -body {
+  ldict deq \
+    { a 1.276020076e+09 b 2 c 3 } \
+    { a 1276020076.0 b 2 c 3 }
+} -result true
+
+test deq-double-representation-2 { Test double representation equality } -match boolean -body {
+  ldict deq \
+    { a 1.276020076e+09 b 2 c 3 } \
+    { a 1276020076 b 2 c 3 }
+} -result true
+
+test deq-string-equality { Test strings equality } -match boolean -body {
+  ldict deq \
+    { a aa b bb c cc } \
+    { a aa c cc b bb }
+} -result true
+
+
+# Tests for the equal sub-command, with focus on lists as dictionay equality
+# testing has been performed above.
+test equal-empty-equal { Test empty lists are equal } -match boolean -body {
+  ldict equal [list] [list]
+} -result true
+
+test equal-diff-length-non-equal { Test two lists of different lengths are not equal } -match boolean -body {
+  ldict equal \
+    {{a 1 b 2} {c 3 d 4}} \
+    {}
+} -result false
+
+test equal-same-list-content-equal { Test equality of two identical lists } -match boolean -body {
+  set l {{a 1 b 2} {c 3 d 4}}
+  ldict equal $l $l
+} -result true
+
+test equal-different-order-non-equal { Test same dictionaries in different order non equal } -match boolean -body {
+  ldict equal \
+    {{a 1 b 2} {c 3 d 4}} \
+    {{c 3 d 4} {a 1 b 2}}
+} -result false
+
+test equal-different-order-no-matter { Test different order in dictionaries does not matter } -match boolean -body {
+  ldict equal \
+    {{a aa b bb} {c 3 d 4}} \
+    {{b bb a aa} {c 3 d 4}}
+} -result true
