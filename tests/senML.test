@@ -33,6 +33,18 @@ test empty-parse-2 {Testing parsing empty array} -body {
 # The list of tests below matches one-to-one with all the examples in the RFC,
 # from top to bottom and in same order.
 
+test rfc-two-measurements-json {Testing two measurements} -body {
+  set json {
+    [
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,
+      "v":23.5},
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,
+      "v":23.6}
+    ]
+  }
+  senML resolve $json
+} -result {[{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1276020076.0,"v":23.5},{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1276020091.0,"v":23.6}]}
+
 test rfc-two-measurements {Testing two measurements} -match boolean -body {
   set json {
     [
