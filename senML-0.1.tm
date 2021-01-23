@@ -186,7 +186,7 @@ proc ::senML::ResolverJSON { j s step { pack {} } } {
       append json "\]"
     }
     PACK {
-      append json [pack2json $pack ","]
+      append json [pack2json $pack] ","
     }
   }
 }
