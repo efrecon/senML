@@ -98,7 +98,7 @@ test stream-streaming {Testing streaming} -match boolean -body {
   }
 } -result true
 
-test stream-streaming-incomplete {Testing incomplete streaming} -match boolean -body {
+test stream-streaming-incomplete-1 {Testing incomplete streaming} -match boolean -body {
   collect init
 
   set s [senSML -callback ::collect::collect]
@@ -116,3 +116,42 @@ test stream-streaming-incomplete {Testing incomplete streaming} -match boolean -
     CLOSE {}
   }
 } -result true
+
+test stream-streaming-incomplete-2 {Testing incomplete streaming} -match boolean -body {
+  collect init
+
+  set s [senSML -callback ::collect::collect]
+  $s stream {[{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,"v":23.5},}
+  $s stream {{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,"v":23.6}}
+  $s stream ",{\"n\":\"urn:dev:ow:10e2073a01080063\","
+  $s stream "\"u\":\"Cel\",\"t\":1.276020099e+09,\"v\":23.7},"
+  $s delete
+
+  collect is {
+    OPEN {}
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020099e+09 v 23.7 }
+    CLOSE {}
+  }
+} -result true
+
+test stream-streaming-incomplete-3 {Testing incomplete streaming} -match boolean -body {
+  collect init
+
+  set s [senSML -callback ::collect::collect]
+  $s stream {[ {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,"v":23.5} ,  }
+  $s stream {{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,"v":23.6 } ,   }
+  $s stream "{\"n\":\"urn:dev:ow:10e2073a01080063\","
+  $s stream "\"u\":\"Cel\",\"t\":1.276020099e+09,\"v\":23.7},"
+  $s delete
+
+  collect is {
+    OPEN {}
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020099e+09 v 23.7 }
+    CLOSE {}
+  }
+} -result true
+
