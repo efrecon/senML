@@ -192,6 +192,8 @@ proc ::senSML::stream { s json } {
     return
   }
 
+  Log $s TRACE "Streaming in $json"
+
   # Append remainder of previous part of stream, if any
   if { [dict get $S remainder] ne "" } {
     set json [dict get $S remainder]$json
@@ -215,7 +217,7 @@ proc ::senSML::stream { s json } {
   set start 0
   while {$start<[string length $json]} {
     set open [string first "\{" $json $start]
-    set nxt [string first "\},\{" $json $open]
+    set nxt [string first "\}," $json $open]
     set end [string first "\}\]" $json $open]
     if { $open >= 0 } {
       if { $end >= 0 && $nxt < 0 } {
@@ -229,13 +231,19 @@ proc ::senSML::stream { s json } {
           break
         } else {
           jsonpack $s [string range $json $open $nxt]
-          set start [expr {$nxt+1}]
+          set start [expr {$nxt+2}]
         }
       } else {
         # Remember what is left after the last entire JSON object for next call
         # to this proc.
         dict set S remainder [string range $json $open end]
+        break
       }
+    } else {
+      # Remember what is left after the last entire JSON object for next call
+      # to this proc.
+      dict set S remainder [string range $json $start end]
+      break
     }
   }
 }
@@ -354,7 +362,7 @@ proc ::senSML::jsonpack { s json } {
 proc ::senSML::dictpack { s d } {
   upvar \#0 $s S
 
-  Log $s TRACE "JSON Pack: $d"
+  Log $s TRACE "DICT Pack: $d"
   if { [dict get $S state] ne "OPEN" } {
     begin $s
   }

@@ -48,7 +48,7 @@ test stream-empty-2 {Testing empty context} -match boolean -body {
   }
 } -result true
 
-test stream-two-packs {Testing two packs} -match boolean -body {
+test stream-packing {Testing two packs} -match boolean -body {
   collect init
 
   set s [senSML -callback ::collect::collect]
@@ -66,7 +66,7 @@ test stream-two-packs {Testing two packs} -match boolean -body {
   }
 } -result true
 
-test stream-two-packs {Testing two packs (lazy coder)} -match boolean -body {
+test stream-packing-lazy {Testing two packs (lazy coder)} -match boolean -body {
   collect init
 
   set s [senSML -callback ::collect::collect]
@@ -78,6 +78,41 @@ test stream-two-packs {Testing two packs (lazy coder)} -match boolean -body {
     OPEN {}
     PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
     PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+    CLOSE {}
+  }
+} -result true
+
+test stream-streaming {Testing streaming} -match boolean -body {
+  collect init
+
+  set s [senSML -callback ::collect::collect]
+  $s stream {[{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,"v":23.5},}
+  $s stream {{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,"v":23.6},}
+  $s delete
+
+  collect is {
+    OPEN {}
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+    CLOSE {}
+  }
+} -result true
+
+test stream-streaming-incomplete {Testing incomplete streaming} -match boolean -body {
+  collect init
+
+  set s [senSML -callback ::collect::collect]
+  $s stream {[{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,"v":23.5},}
+  $s stream {{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,"v":23.6},}
+  $s stream "{\"n\":\"urn:dev:ow:10e2073a01080063\","
+  $s stream "\"u\":\"Cel\",\"t\":1.276020099e+09,\"v\":23.7},"
+  $s delete
+
+  collect is {
+    OPEN {}
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020099e+09 v 23.7 }
     CLOSE {}
   }
 } -result true
