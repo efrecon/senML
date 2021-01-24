@@ -80,7 +80,7 @@ proc ::senSML::new { args } {
 
   # Initialise the internal state of the stream
   dict set S remainder ""
-  dict set S closed 0
+  dict set S state ""
   Init $s
 
   return $s
@@ -258,8 +258,10 @@ proc ::senSML::begin { s } {
   upvar \#0 $s S
 
   Init $s
-  Callback $s OPEN
-  dict set S closed 0
+  if { [dict get $S state] eq "" } {
+    Callback $s OPEN
+    dict set S state OPEN
+  }
 }
 
 # ::senSML::end -- End array parsing
@@ -276,10 +278,10 @@ proc ::senSML::begin { s } {
 #       Will call the callback associated to the context as many times as needed
 proc ::senSML::end { s } {
   upvar \#0 $s S
-  if { ![dict get $S closed] } {
+  if { [dict get $S state] eq "OPEN" } {
     Callback $s CLOSE
     dict set S remainder ""
-    dict set S closed 1
+    dict set S state ""
   }
 }
 
@@ -331,7 +333,7 @@ proc ::senSML::jsonpack { s json } {
   Log $s TRACE "JSON Pack: $json"
   # Parse incoming JSON as a Tcl dictionary and pass it along to dictpack which
   # will perform all the work.
-  dictpack [::json::json2dict $json]
+  dictpack $s [::json::json2dict $json]
 }
 
 
@@ -353,7 +355,9 @@ proc ::senSML::dictpack { s d } {
   upvar \#0 $s S
 
   Log $s TRACE "JSON Pack: $d"
-  dict set S closed 0
+  if { [dict get $S state] ne "OPEN" } {
+    begin $s
+  }
 
   # Set and remember base fields that would be present in the pack.
   dict for {f v} $d {
