@@ -1,0 +1,54 @@
+# This is a test for a package that is used in the other tests... We have to
+# strictly ensure our tests will be valid!
+
+if {"::tcltest" ni [namespace children]} {
+    package require tcltest 2
+    namespace import -force ::tcltest::*
+}
+
+package require lambda
+
+source [file join [file dirname [info script]] ldict.tcl]
+source [file join [file dirname [info script]] collect.tcl]
+
+
+# Define a customMatch for booleans so we ensure the result of equality calls
+# actually are booleans (and we don't assume they return 0 or 1 as we would have
+# to do when using -match exact below)
+customMatch boolean [lambda {expected actual} {
+  if { [string is true $expected] && [string is true $actual] } { return 1 }
+  if { [string is false $expected] && [string is false $actual] } { return 1 }
+  return 0
+}]
+
+
+test collect-empty { Test empty collection } -match boolean -body {
+  collect init
+  collect is {}
+} -result true
+
+test collect-no-dict { Test empty dictionary } -match boolean -body {
+  collect init
+  collect collect _ test
+  collect is {
+    test {}
+  }
+} -result true
+
+test collect-one-dict { Test one dictionary} -match boolean -body {
+  collect init
+  collect collect _ test {a 1 b 2}
+  collect is {
+    test {a 1 b 2}
+  }
+} -result true
+
+test collect-two-dict { Test two dictionaries} -match boolean -body {
+  collect init
+  collect collect _ test {a 1 b 2}
+  collect collect _ test {c 3 d 4}
+  collect is {
+    test {a 1 b 2}
+    test {d 4 c 3}
+  }
+} -result true

@@ -10,8 +10,9 @@ if {"::tcltest" ni [namespace children]} {
 package require senML
 package require lambda
 
-# Source package for equality of list of dictionaries
+# Source package for equality of list of dictionaries and callback collection
 source [file join [file dirname [info script]] ldict.tcl]
+source [file join [file dirname [info script]] collect.tcl]
 
 # Define a customMatch for booleans it makes test more readable
 customMatch boolean [lambda {expected actual} {
@@ -21,14 +22,47 @@ customMatch boolean [lambda {expected actual} {
 }]
 
 
-test empty-parse-1 {Testing parsing empty string} -body {
+test empty-resolve-1 {Testing resolve empty string} -body {
   senML resolve ""
 } -result ""
 
-test empty-parse-2 {Testing parsing empty array} -body {
+test empty-resolve-2 {Testing resolve empty array} -body {
   senML resolve {[]}
 } -result {[]}
 
+test stream-parse-empty-1 {Testing parsing empty string} -match boolean -body {
+  collect init
+  senML stream "" -callback ::collect::collect
+  collect is {}
+}
+
+test stream-parse-empty-2 {Testing parsing empty array} -match boolean -body {
+  collect init
+  senML stream {[]} -callback ::collect::collect
+  collect is {
+    OPEN {}
+    CLOSE {}
+  }
+}
+
+test stream-parse-1 {Testing parsing} -match boolean -body {
+  set json {
+    [
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,
+      "v":23.5},
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,
+      "v":23.6}
+    ]
+  }
+  collect init
+  senML stream $json -callback ::collect::collect
+  collect is {
+    OPEN {}
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 }
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+    CLOSE {}
+  }
+} -result true
 
 # The list of tests below matches one-to-one with all the examples in the RFC,
 # from top to bottom and in same order.
