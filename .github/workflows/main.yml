@@ -27,8 +27,8 @@ jobs:
 
       # Runs a single command using the runners shell
       - name: Install Dependencies
-        run: sudo apt-get update -yy && sudo apt-get install tcl tcllib 
+        run: sudo apt-get update -yy && sudo apt-get install -yy tcl tcllib tcllib-critcl
 
       # Runs a set of commands using the runners shell
       - name: Run tests
-        run: $GITHUB_WORKSPACE/senML/tests/all.tcl
+        run: $GITHUB_WORKSPACE/tests/all.tcl
