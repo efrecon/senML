@@ -678,9 +678,15 @@ proc ::senSML::Callback { s step args } {
 proc ::senSML::Log { s lvl msg } {
   upvar \#0 $s S
   if { [dict get $S -log] ne "" } {
-    set lvl [string tolower $lvl]
     if { [lsearch -nocase $vars::levels $lvl] <= [lsearch -nocase $vars::levels [dict get $S -level]] } {
-      puts [dict get $S -log] "\[$lvl\] $msg"
+      set dest [dict get $S -log]
+      if { [string match "@*" $dest] } {
+        set dest [string range $dest 1 end]
+        catch {{*}$dest $lvl $msg}
+      } else {
+        set lvl [string tolower $lvl]
+        puts $dest "\[$lvl\] $msg"
+      }
     }
   }
 }

@@ -18,6 +18,9 @@ set json {
    ]
 }
 
+proc logger { lvl msg } {
+  puts "\[[clock format [clock seconds]]\] \[$lvl\] $msg"
+}
 
 proc datapoint { s step {pack {}} } {
   if { $step eq "PACK" } {
@@ -28,4 +31,7 @@ proc datapoint { s step {pack {}} } {
   }
 }
 
-senML stream $json -callback datapoint
+# Print each SenML pack in the proc called datapoint. Show how to setup a
+# different logging proc by bumping up the debug level and passing one of our
+# procs.
+senML stream $json -callback datapoint -level debug -log @logger
