@@ -289,3 +289,20 @@ test rfc-actuator-lights-2 {Turn off lights } -match boolean -body {
   }
 } -result true
 
+
+# Below are additional tests in addition to the examples from the RFC
+
+test unknown-fields {Testing unknown fields are passed through} -match boolean -body {
+  set json {
+    [
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020076e+09,
+      "v":23.5,"myTag1":"val1","myTag2":"val2"},
+      {"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1.276020091e+09,
+      "v":23.6}
+    ]
+  }
+  ldict equal [senML parse $json] {
+    { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020076e+09 v 23.5 myTag1 "val1" myTag2 "val2"}
+    { n "urn:dev:ow:10e2073a01080063" u Cel t 1.276020091e+09 v 23.6 }
+  }
+} -result true
