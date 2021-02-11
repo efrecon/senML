@@ -39,6 +39,8 @@ namespace eval ::senSML {
     variable -level WARN;       # loglevel
     variable -callback  ""
     variable -version   10
+    variable -relax     TIME;   # A list of features to perform relax parsing on
+    variable -future    17179869184; # This is 2**34, everything greater is ms!
   }
 
   namespace export {[a-z]*}
@@ -453,7 +455,9 @@ proc ::senSML::dictpack { s d } {
     # Resolve time to absolute value
     set now [clock seconds]
     set t [dict get $pack t]
-    if { $t < $vars::reltime } {
+    if { [lsearch -nocase [dict get $S -relax] TIME*] >= 0 && $t > [dict get $S -future] } {
+      dict set pack t [expr {$t/1000.0}]
+    } elseif { $t < $vars::reltime } {
       # Seconds from/after now.
       dict set pack t [expr {$now+$t}]
     }

@@ -155,3 +155,30 @@ test stream-streaming-incomplete-3 {Testing incomplete streaming} -match boolean
   }
 } -result true
 
+test stream-ms-correction {Automatically correct ms} -match boolean -body {
+  collect init
+
+  set s [senSML -callback ::collect::collect]
+  $s jsonpack {{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1613045747818,"v":23.5}}
+  $s delete
+
+  collect is {
+    OPEN {}
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1613045747.818 v 23.5 }
+    CLOSE {}
+  }
+} -result true
+
+test stream-no-correction {Disable ms auto-correction} -match boolean -body {
+  collect init
+
+  set s [senSML -callback ::collect::collect -relax {}]
+  $s jsonpack {{"n":"urn:dev:ow:10e2073a01080063","u":"Cel","t":1613045747818,"v":23.5}}
+  $s delete
+
+  collect is {
+    OPEN {}
+    PACK { n "urn:dev:ow:10e2073a01080063" u Cel t 1613045747818 v 23.5 }
+    CLOSE {}
+  }
+} -result true
