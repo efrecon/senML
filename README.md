@@ -43,6 +43,15 @@ Dash-led options are:
   array, for each resolved pack of the array, and at the end of the array. When
   the step is `PACK`, the callback will also take another argument which will be
   a Tcl dictionary with the content of the [resolved][resolve] [pack].
+* `-relax` is a list of features where the parser should relax its
+  control/behaviour. Features are understood independently of their casing.
+  Recognised features are:
+  + `TIME`: Timestamps too far off in the future will be understood as being
+    expressed in milliseconds, and not in seconds. (see `-future` below). This
+    is turned on by default.
+* `-future` is a POSIX epoch value starting from which timestamps will be
+  understood as being in milliseconds (and not seconds) when the relax feature
+  `TIME` is turned on (the default). It defaults to 2**34, some date in the year 2514.
 
 By construction, [SenSML] needs to deal with incomplete JSON. This is because,
 in regular mode of operation, the source would have produced the beginning of a
